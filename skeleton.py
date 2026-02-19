@@ -5,13 +5,13 @@ class Skeleton:
         self.muscle = muscle
         self.mass = 80  # mass of the hopper in kg
         self.g = 9.81
-        self.l_f = 0.99 #flight lenght of the leg, not sure this skeleton specifc or simulation specific.
-        self.d = 0.04 #moment arm
-        self.phi_ref = 110*np.pi/180 #reference knee angle in radians
-        self.l_ref = 0.5 #update this 
-        self.l_s = 0.5 #segment length of the leg, update this based on actual geometry of the leg.
-        self.v = 0.0 #initial velocity of the hopper
-        self.y = 1 #initial height of the hopper, start standing (leg almost fully extended)
+        self.l_f = 0.99 # flight length of the leg
+        self.d = 0.04 # moment arm
+        self.phi_ref = 110*np.pi/180 # reference knee angle in radians
+        self.l_ref = 0.5 
+        self.l_s = 0.5 # segment length of the leg.
+        self.v = 0.0 # initial velocity of the hopper
+        self.y = 1 # initial height of the hopper, start above the ground
 
     def get_leg_length(self, y, stance: bool):
         if stance:
@@ -20,7 +20,7 @@ class Skeleton:
             return self.l_f 
 
     def get_leg_force(self, f_m, l_leg):
-        d = self.d #d is specidic to knee geometry, we can set it as a parameter in the Skeleton class.
+        d = self.d 
         l_s = self.l_s
         denom = np.sqrt(l_s**2 - (l_leg / 2)**2)
         if denom < 1e-6:
@@ -41,7 +41,7 @@ class Skeleton:
         l_s = self.l_s
 
         arg = 1 - (l_leg**2) / (2 * l_s**2)
-        #arg = np.clip(arg, -1.0, 1.0)
+
         phi = np.arccos(arg)
 
         return phi
