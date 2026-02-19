@@ -16,9 +16,9 @@ class Muscle:
         self.l_ref = l_ref
         self.dt = dt
         self.l_ce = l_opt
-        self.tau = 0.01 #update this based on the paper
+        self.tau = 0.01 
         self.act = 0.0
-        self.stim0 = 0.01 #baseline stimulation, update this based on the
+        self.stim0 = 0.01 #baseline stimulation
         # Initialize deque for storing muscle forces (for delayed feedback)
         self.max_force_history = max_force_history
         self.force_history = deque(maxlen=max_force_history)
@@ -82,8 +82,6 @@ class Muscle:
     
     def update_activation(self, stim):
         self.act = self.act + (stim - self.act) / self.tau * self.dt
-        # Clamp activation to physiological range [0, 1]
-        #self.act = np.clip(self.act, 0.0, 1.0)
         return self.act
     
     def get_muscle_dynamics(self, l_ce, l_m, stim):        
@@ -94,8 +92,7 @@ class Muscle:
         f_m = f_see_norm * self.F_max_iso
         f_ce = f_see_norm - f_pe_norm
 
-        we calculate v_ce here and return f_see and v_ce. f_see is the muscle force (or basically f_m).
-
+        we calculate v_ce here and return f_see and v_ce. f_see is the muscle force (or f_m).
         """
         act = self.update_activation(stim)
         l_see = l_m - l_ce
@@ -111,13 +108,12 @@ class Muscle:
 
         denom = act * f_l_ce_norm * self.F_max_iso
         if denom < 1e-6:
-            f_v = 1  # Update this later after discussing how to handle near-zero activation or force-length conditions (adding a small number may not be accurate)
+            f_v = 1 
         else:
-            f_v = f_ce / denom #to avoid division by zero
+            f_v = f_ce / denom 
         v_ce = self.inverse_force_velocity_CE(f_v)
         f_m = f_see_norm * self.F_max_iso
-        # try clipping muscle force?
-        #f_m = np.clip(f_m, 0, self.F_max_iso)
+
         return f_m, v_ce 
     
     def update_muscle_state(self, l_m, stim):
@@ -125,19 +121,14 @@ class Muscle:
         This function updates the muscle state (fiber length) based on current muscle length, activation, 
         and the force-velocity relationship. 
         It should be called in each time step of the simulation loop.
-
         """
         f_m, v_ce = self.get_muscle_dynamics(self.l_ce, l_m, stim)
         
-        #l_ce_new = l_ce + v_ce * dt
-        #we have to initialise self.l_ce somewhere before this function is called. 
         self.l_ce += v_ce * self.dt
         
-        # 3. Store for plotting/feedback
         self.current_force = f_m
         self.current_velocity = v_ce
         
-        # 4. Store force in deque for delayed feedback
         self.force_history.append(f_m)
         
         return f_m
@@ -145,17 +136,6 @@ class Muscle:
     def get_delayed_force(self, delay_steps=1):
         """
         Get the muscle force from 'delay_steps' iterations ago.
-        
-        Parameters:
-        -----------
-        delay_steps : int
-            Number of timesteps to look back in history (default: 1).
-            delay_steps=1 returns the force from 1 timestep ago.
-            
-        Returns:
-        --------
-        float
-            The delayed muscle force, or the oldest available if not enough history.
         """
         if delay_steps <= 0:
             return 0.0
@@ -164,22 +144,18 @@ class Muscle:
             # Return oldest available force if delay exceeds history length
             return self.force_history[0] if len(self.force_history) > 0 else 0.0
         
-        # Convert deque to list and index from the end
         return self.force_history[-delay_steps]
     
     def get_force_history_array(self):
         """
         Get all stored forces as a numpy array.
-        
-        Returns:
-        --------
-        np.ndarray
-            Array of stored muscle forces.
         """
         return np.array(list(self.force_history))
     
     def clear_force_history(self):
-        """Clear the force history deque."""
+        """
+        Clear the force history deque.
+        """
         self.force_history.clear()
         
     def plot_characteristics(self):
@@ -190,11 +166,8 @@ class Muscle:
         fig, ax = plt.subplots(1, 3, figsize=(16, 5))
         fig.suptitle(f"Muscle Characteristics: {self.name} (F_max={self.F_max_iso}N)")
 
-        # 1. Force-Length (CE & PE)
-        # Sweep fiber length from 50% to 180% of optimal length
         l_scan = np.linspace(0.5 * self.l_opt, 1.8 * self.l_opt, 100)
         
-        # Calculate forces using YOUR methods
         fl_ce = [self.force_length_relationship_CE(l) * self.F_max_iso for l in l_scan]
         fl_pe = [self.force_length_relationship_PE(l) * self.F_max_iso for l in l_scan]
         fl_total = np.array(fl_ce) + np.array(fl_pe)
@@ -209,8 +182,6 @@ class Muscle:
         ax[0].legend()
         ax[0].grid(True)
 
-        # 2. Force-Length (Tendon / SEE)
-        # Sweep tendon length slightly above slack length
         l_see_scan = np.linspace(self.l_slack, 1.08 * self.l_slack, 100)
         fl_see = [self.force_length_relationship_SEE(l) * self.F_max_iso for l in l_see_scan]
 
@@ -220,9 +191,6 @@ class Muscle:
         ax[1].set_xlabel("Tendon Length (m)")
         ax[1].grid(True)
 
-        # 3. Force-Velocity
-        # Sweep velocity from Shortening (-v_max) to Lengthening (+0.5*v_max)
-        # Note: Your math implies negative v_ce is shortening (f_v < 1)
         v_scan = np.linspace(-self.v_max, 0.5 * self.v_max, 100)
         fv_curve = [self.force_velocity_relationship_CE(v) * self.F_max_iso for v in v_scan]
 
