@@ -1,5 +1,5 @@
 # A Two Segment Hopping Model
-A two segment hopping model using one muscle based on [Positive force feedback in bouncing gaits?](https://doi.org/10.1098/rspb.2003.2454).
+A two segment hopping model using a single muscle based on [Positive force feedback in bouncing gaits?](https://doi.org/10.1098/rspb.2003.2454).
 
 ## Animation
 

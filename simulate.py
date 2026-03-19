@@ -135,8 +135,8 @@ def main():
     t_max = 10  # total simulation time (s)
     delay_time = 15 #in milliseconds, based on paper
     delay_steps = int(delay_time / (dt * 1000))  # feedback delay in timesteps
-    show_animation = True  # Set to True to see animation, False for plots only
-    save_video = False  # If True, save mp4 only; if False, show animation window
+    show_animation = False  # Set to True to see animation, False for plots only
+    save_video = True 
     
     # Muscle parameters
     F_max_iso = 22000  # Maximum isometric force (N)
@@ -191,11 +191,16 @@ def main():
     max_h = get_max_height(results)
     print()
     
+    # Save plots to Plots/ folder in the project directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    plots_dir = os.path.join(script_dir, 'Plots')
+    os.makedirs(plots_dir, exist_ok=True)
+
     # Plot full results
-    plot_results(results, save_dir=run_dir)
-    
+    plot_results(results, save_dir=plots_dir)
+
     # Plot a single stance cycle (2nd cycle to avoid transient)
-    plot_single_stance_cycle(results, cycle_num=6, save_dir=run_dir)
+    plot_single_stance_cycle(results, cycle_num=6, save_dir=plots_dir)
 
 
 def plot_results(results, save_dir=None):

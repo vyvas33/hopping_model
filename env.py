@@ -4,6 +4,7 @@ import numpy as np
 import os
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import matplotlib.animation as animation
 
 class Simulation:
@@ -122,125 +123,205 @@ class Simulation:
             'phase': np.array(phase_hist)
         }
         
-        # Create animation if True
-        if self.animate:
+        # Create animation if showing or saving video
+        if self.animate or self.save_video:
             self.animation_results = results
             self.create_animation(results)
         return results
     
     def create_animation(self, results, skip_frames=200):
         """
-        Create an animation of the hopping simulation with two-segment leg.
+        Create a polished animation of the hopping simulation with a full body.
         """
-        # Calculate knee positions for all frames
+        # Precompute knee and foot positions for all frames
         l_s = self.skeleton.l_s
         knee_x_traj = []
         knee_y_traj = []
         foot_y_traj = []
-        
+
         for i in range(len(results['height'])):
             y_hip = results['height'][i]
             stance = y_hip <= self.skeleton.l_f
-            
+
             if stance:
                 l_leg = y_hip
                 foot_y = 0
                 knee_y = l_leg / 2
                 knee_x_term = l_s**2 - knee_y**2
-                if knee_x_term < 0:
-                    knee_x_term = 0
-                knee_x = np.sqrt(knee_x_term)
+                knee_x = np.sqrt(max(knee_x_term, 0))
             else:
                 l_leg = self.skeleton.l_f
                 foot_y = y_hip - l_leg
                 knee_y = foot_y + l_leg / 2
-                knee_x_term = l_s**2 - (l_leg/2)**2
-                if knee_x_term < 0:
-                    knee_x_term = 0
-                knee_x = np.sqrt(knee_x_term)
-            
+                knee_x_term = l_s**2 - (l_leg / 2)**2
+                knee_x = np.sqrt(max(knee_x_term, 0))
+
             knee_x_traj.append(knee_x)
             knee_y_traj.append(knee_y)
             foot_y_traj.append(foot_y)
-        
-        # Create figure
-        fig_anim = plt.figure(figsize=(10, 10))
-        ax_anim = plt.subplot(111)
-        
+
+        # --- Body dimension constants ---
+        foot_length = 0.12
+        foot_height = 0.04
+        joint_radius = 0.035
+        mass_radius = 0.07       # point mass at hip
+        seg_lw = 8               # limb line width
+
+        # Colours
+        limb_color = '#2C5F7C'      # darker blue for limbs
+        joint_color = '#1B3A4B'     # dark joints
+        mass_color = '#1B3A4B'      # point mass
+        foot_color = '#1B3A4B'
+        ground_color = '#8B7355'    # earthy brown
+
+        # --- Figure setup: 1920x1080 (Full HD) white background ---
+        dpi = 100
+        fig_anim = plt.figure(figsize=(1920 / dpi, 1080 / dpi),
+                              facecolor='white', dpi=dpi)
+        ax_anim = fig_anim.add_subplot(111)
+        ax_anim.set_facecolor('white')
+
         ax_anim.set_xlim(-1.5, 1.5)
-        ax_anim.set_ylim(-0.2, 1.5)
+        ax_anim.set_ylim(-0.15, 1.8)
         ax_anim.set_aspect('equal')
-        ax_anim.axhline(0, color='brown', lw=3, label='Ground')
-        ax_anim.set_xlabel('X (m)')
-        ax_anim.set_ylabel('Y (m)')
-        ax_anim.set_title('Hopping Animation - Two Segment Leg')
-        ax_anim.grid(True, alpha=0.3)
-        
-        # Shank segment (from foot to knee)
-        shank, = ax_anim.plot([], [], 'b-', lw=6, label='Shank')
-        # Thigh segment (from knee to hip)
-        thigh, = ax_anim.plot([], [], 'r-', lw=6, label='Thigh')
+        ax_anim.axis('off')
+
+        # Fill the figure with the axes (minimize whitespace)
+        fig_anim.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+        # Ground
+        ground_rect = patches.Rectangle((-1.0, -0.15), 2.0, 0.15,
+                                        facecolor=ground_color, edgecolor='none')
+        ax_anim.add_patch(ground_rect)
+        ax_anim.plot([-1.0, 1.0], [0, 0], color='#5C4033', lw=2)  # ground line
+
+        # --- Create artist objects (initially empty) ---
+        # Shadow ellipse on the ground
+        shadow = patches.Ellipse((0, 0.005), 0.3, 0.03,
+                                 facecolor='#00000020', edgecolor='none')
+        ax_anim.add_patch(shadow)
+
+        # Leg segments (solid rounded caps)
+        thigh_line, = ax_anim.plot([], [], color=limb_color, lw=seg_lw,
+                                   solid_capstyle='round', zorder=3)
+        shank_line, = ax_anim.plot([], [], color=limb_color, lw=seg_lw,
+                                   solid_capstyle='round', zorder=3)
+
+        # Joint circles (knee, ankle)
+        knee_joint = plt.Circle((0, 0), joint_radius, fc=joint_color, ec='none', zorder=4)
+        ankle_joint = plt.Circle((0, 0), joint_radius * 0.8, fc=joint_color, ec='none', zorder=4)
+        ax_anim.add_patch(knee_joint)
+        ax_anim.add_patch(ankle_joint)
+
+        # Foot
+        foot_patch = patches.FancyBboxPatch((0, 0), foot_length, foot_height,
+                                            boxstyle="round,pad=0.01",
+                                            facecolor=foot_color, edgecolor='none', zorder=3)
+        ax_anim.add_patch(foot_patch)
+
         # Point mass at hip
-        mass, = ax_anim.plot([], [], 'ko', ms=15, label='Mass (Hip)')
-        
-        time_text = ax_anim.text(0.02, 0.95, '', transform=ax_anim.transAxes, 
-                                fontsize=12, verticalalignment='top',
-                                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-        
-        ax_anim.legend(loc='upper right', fontsize=10)
-        
-        # for animation
+        mass_circle = plt.Circle((0, 0), mass_radius, fc=mass_color, ec='none', zorder=5)
+        ax_anim.add_patch(mass_circle)
+
+        # Info text
+        time_text = ax_anim.text(0.02, 0.97, '', transform=ax_anim.transAxes,
+                                 fontsize=10, verticalalignment='top', family='monospace',
+                                 bbox=dict(boxstyle='round,pad=0.4', facecolor='white',
+                                           edgecolor='#cccccc', alpha=0.9))
+
+        # Phase badge
+        phase_text = ax_anim.text(0.98, 0.97, '', transform=ax_anim.transAxes,
+                                  fontsize=11, fontweight='bold', verticalalignment='top',
+                                  horizontalalignment='right',
+                                  bbox=dict(boxstyle='round,pad=0.3', facecolor='#4CAF50',
+                                            edgecolor='none', alpha=0.9),
+                                  color='white')
+
+        # Frame indices
         indices = np.arange(0, len(results['time']), skip_frames)
-        
+
         def update_anim(frame):
             idx = indices[frame] if frame < len(indices) else indices[-1]
             if idx >= len(results['time']):
                 idx = len(results['time']) - 1
-            
+
             y_hip = results['height'][idx]
             foot_y = foot_y_traj[idx]
             knee_y = knee_y_traj[idx]
             knee_x = knee_x_traj[idx]
-            
-            shank.set_data([0, knee_x], [foot_y, knee_y])
-    
-            thigh.set_data([knee_x, 0], [knee_y, y_hip])
-         
-            mass.set_data([0], [y_hip])
-            
-            # Determine phase
             is_stance = y_hip <= self.skeleton.l_f
-            phase_str = 'STANCE' if is_stance else 'FLIGHT'
-            
-            time_text.set_text(f'Time: {results["time"][idx]:.3f} s\n'
-                             f'Height: {y_hip:.3f} m\n'
-                             f'Velocity: {results["velocity"][idx]:.3f} m/s\n'
-                             f'Phase: {phase_str}\n'
-                             f'Force: {results["leg_force"][idx]:.1f} N')
-            
-            return thigh, shank, mass, time_text
-        
+
+            # --- Update leg segments ---
+            shank_line.set_data([0, knee_x], [foot_y, knee_y])
+            thigh_line.set_data([knee_x, 0], [knee_y, y_hip])
+
+            # --- Update joints ---
+            knee_joint.set_center((knee_x, knee_y))
+            ankle_joint.set_center((0, foot_y))
+
+            # --- Foot ---
+            foot_patch.set_x(-foot_length * 0.4)
+            foot_patch.set_y(foot_y - foot_height)
+
+            # --- Point mass at hip ---
+            mass_circle.set_center((0, y_hip))
+
+            # --- Shadow on ground ---
+            shadow_scale = max(0.1, 0.35 - 0.15 * (y_hip - 0.8))
+            shadow.set_width(shadow_scale)
+            shadow_alpha = max(0.04, 0.12 - 0.06 * (y_hip - 0.8))
+            shadow.set_facecolor(f'#000000{int(shadow_alpha * 255):02x}')
+
+            # --- Phase badge ---
+            if is_stance:
+                phase_text.set_text('STANCE')
+                phase_text.get_bbox_patch().set_facecolor('#FF7043')
+            else:
+                phase_text.set_text('FLIGHT')
+                phase_text.get_bbox_patch().set_facecolor('#4CAF50')
+
+            # --- Info text ---
+            time_text.set_text(
+                f't = {results["time"][idx]:.3f} s\n'
+                f'h = {y_hip:.3f} m\n'
+                f'v = {results["velocity"][idx]:.2f} m/s\n'
+                f'F = {results["leg_force"][idx]:.0f} N')
+
+            return (thigh_line, shank_line, knee_joint, ankle_joint,
+                    foot_patch, mass_circle, shadow, time_text, phase_text)
+
         # Create animation
         n_frames = len(indices)
         ani = animation.FuncAnimation(fig_anim, update_anim, frames=n_frames,
-                                     interval=10, blit=True, repeat=True)
-        
-        plt.tight_layout()
-        
+                                      interval=10, blit=True, repeat=True)
+
+
+
         if self.save_video:
-            if not self.save_dir:
-                raise ValueError("save_dir is required when save_video is True")
-            video_path = os.path.join(self.save_dir, 'hopping_animation.mp4')
+            # Save to Videos/ folder in the project directory
+            project_dir = os.path.dirname(os.path.abspath(__file__))
+            videos_dir = os.path.join(project_dir, 'Videos')
+            os.makedirs(videos_dir, exist_ok=True)
+
+            # Save mp4
+            video_path = os.path.join(videos_dir, 'hopping_animation.mp4')
             print(f"Saving animation to {video_path}...")
             Writer = animation.writers['ffmpeg']
-            writer = Writer(fps=60, metadata=dict(artist='Simulation'), bitrate=1800)
-            ani.save(video_path, writer=writer)
+            writer = Writer(fps=60, metadata=dict(artist='Simulation'), bitrate=5000)
+            ani.save(video_path, writer=writer, dpi=dpi)
             print(f"Animation saved successfully to {video_path}")
+
+            # Convert to gif
+            gif_path = os.path.join(videos_dir, 'hopping_animation.gif')
+            print(f"Saving GIF to {gif_path}...")
+            ani.save(gif_path, writer='pillow', fps=30, dpi=dpi)
+            print(f"GIF saved successfully to {gif_path}")
+
             plt.close(fig_anim)
         else:
             plt.show()
             plt.close(fig_anim)
-        
+
         return ani
 
 
